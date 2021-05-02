@@ -1,7 +1,3 @@
-# !!! Старая версия плагина перестала работать (до 2020.10.06). Новая версия работает благодаря [denisborovikov](https://github.com/denisborovikov). Ее нужно [скачать](https://github.com/podgorniy/alfred-translate/raw/master/Translate.alfredworkflow) и заново установить.
-
-----
-
 # RU-EN EN-RU Translating Alfred Workflow
 
 [Скачать](https://github.com/podgorniy/alfred-translate/raw/master/Translate.alfredworkflow)
@@ -13,9 +9,9 @@
 - Показывает варианты перевода для одного слова.
 - Показывает транскрипцию при переводе с английского.
 - Исправляет ошибки в словах.
-- Переводит как слова так и предложения.
+- Переводит как слова, так и предложения.
 - Копирует результат перевода в буфер обмена.
-- Не работает без интернет соединения.
+- Не работает без интернет-соединения.
 
 
 Перевод слова, запуск из строки Альфреда по ключевому слову `t` или `e`:
@@ -39,7 +35,12 @@
 
 ## Changelog
 
-**2020.10.06
+**2021.05.02**
+
+- [pavel-alay](https://github.com/pavel-alay) мигрировал на Python 3.
+
+
+**2020.10.06**
 
 - [denisborovikov](https://github.com/denisborovikov) убрал запрос к неработающему API yandex, и плагин снова работает.
 
