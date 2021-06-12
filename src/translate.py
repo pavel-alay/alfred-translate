@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from urllib.request import urlopen
 from urllib.parse import urlencode
 import json
 import feedback
-from multiprocessing import Pool
+import asyncio
+import aiohttp
 import re
 import sys
 
@@ -76,16 +76,23 @@ def get_translation_suggestions(input_string, spelling_suggestions, vocabulary_a
     return res
 
 
-def process_response_as_json(request_url):
-    """Accepts request url returns response as """
-    request = urlopen(request_url)
-    response_json = json.loads(request.read())
-    return response_json
+async def process_response_as_json(url, session):
+    try:
+        async with session.get(url=url) as response:
+            resp = await response.read()
+            response_json = json.loads(resp)
+            return response_json
+    except Exception as e:
+        print("Unable to get url {} due to {}.".format(url, e.__class__))
+
+
+async def process_requests(urls):
+    async with aiohttp.ClientSession() as session:
+        return await asyncio.gather(*[process_response_as_json(url, session) for url in urls])
 
 
 def get_output(input_string):
     """Main entry point"""
-    pool = Pool(processes=3)
     fb = feedback.Feedback()
     input_string = input_string.strip()
     if not input_string:
@@ -114,7 +121,7 @@ def get_output(input_string):
 
     # Making requests in parallel
     requests_urls = [spell_check_url, article_url]
-    responses = pool.map(process_response_as_json, requests_urls)
+    responses = asyncio.run(process_requests(requests_urls))
 
     spelling_suggestions_items = get_spelling_suggestions(responses[0])
     # Generate possible xml outputs
