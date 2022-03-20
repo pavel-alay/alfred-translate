@@ -1,6 +1,6 @@
 # RU-EN EN-RU Translating Alfred Workflow
 
-[Скачать](https://github.com/podgorniy/alfred-translate/raw/master/Translate.alfredworkflow)
+[Скачать](https://github.com/pavel-alay/alfred-translate/raw/master/Translate.alfredworkflow)
 
 Удобный перевод текстов в en-ru ru-en направлениях.
 
