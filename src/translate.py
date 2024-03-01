@@ -4,10 +4,10 @@ import os
 from urllib.parse import urlencode
 import json
 import feedback
-import asyncio
-import aiohttp
+import concurrent.futures
 import re
 import sys
+import http.client
 
 dict_api_key = os.getenv('DICTIONARY_API_KEY')
 translate_api_key = os.getenv('TRANSLATE_API_KEY')
@@ -79,25 +79,25 @@ def get_translation_suggestions(vocabulary_article, translation_suggestions):
     return res
 
 
-async def process_get_response_as_json(url, session):
-    async with session.get(url=url) as response:
-        resp = await response.read()
-        response_json = json.loads(resp)
-        return response_json
+def to_json(response):
+    return json.loads(response)
 
 
-async def process_spelling_request(input_string, source_lang, session):
+def process_spelling_request(input_string, source_lang):
     # Build spell check url
     spell_check_params = {
         'text': input_string,
         'lang': source_lang
     }
-    spell_check_url = 'https://speller.yandex.net/services/spellservice.json/checkText' + '?' + urlencode(
-        spell_check_params)
-    return await process_get_response_as_json(spell_check_url, session)
+    conn = http.client.HTTPSConnection("speller.yandex.net")
+    conn.request("GET", '/services/spellservice.json/checkText?' + urlencode(spell_check_params))
+    response = conn.getresponse()
+    data = response.read().decode()
+    conn.close()
+    return to_json(data)
 
 
-async def process_vocabulary_request(input_string, source_lang, target_lang, session):
+def process_vocabulary_request(input_string, source_lang, target_lang):
     # Build article url
     article_params = {
         'key': dict_api_key,
@@ -105,11 +105,16 @@ async def process_vocabulary_request(input_string, source_lang, target_lang, ses
         'text': input_string,
         'flags': 4
     }
-    article_url = 'https://dictionary.yandex.net/api/v1/dicservice.json/lookup' + '?' + urlencode(article_params)
-    return await process_get_response_as_json(article_url, session)
+
+    conn = http.client.HTTPSConnection("dictionary.yandex.net")
+    conn.request("GET", '/api/v1/dicservice.json/lookup?' + urlencode(article_params))
+    response = conn.getresponse()
+    data = response.read().decode()
+    conn.close()
+    return to_json(data)
 
 
-async def process_translate_request(input_string, source_lang, target_lang, session):
+def process_translate_request(input_string, source_lang, target_lang):
     if not translate_api_key:
         return {}
     body = {
@@ -119,23 +124,29 @@ async def process_translate_request(input_string, source_lang, target_lang, sess
             input_string
         ]
     }
-    async with session.post(url='https://translate.api.cloud.yandex.net/translate/v2/translate',
-                            headers={'Authorization': translate_api_key},
-                            json=body) as response:
-        resp = await response.read()
-        response_json = json.loads(resp)
-        return response_json
+    headers = {
+        'Authorization': translate_api_key
+    }
+    conn = http.client.HTTPSConnection('translate.api.cloud.yandex.net')
+    conn.request("POST", "/translate/v2/translate", json.dumps(body), headers)
+    response = conn.getresponse()
+    data = response.read().decode()
+    conn.close()
+    return to_json(data)
 
 
-async def process_requests(input_string):
+def process_requests(input_string):
     source_lang = get_source_lang(input_string)
     target_lang = get_target_lang(input_string)
-    async with aiohttp.ClientSession() as session:
-        return await asyncio.gather(
-            process_spelling_request(input_string, source_lang, session),
-            process_vocabulary_request(input_string, source_lang, target_lang, session),
-            process_translate_request(input_string, source_lang, target_lang, session)
-        )
+    data = {}
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_req = {executor.submit(process_spelling_request, input_string, source_lang): 'spelling',
+                         executor.submit(process_vocabulary_request, input_string, source_lang, target_lang): 'vocabulary',
+                         executor.submit(process_translate_request, input_string, source_lang, target_lang): 'translate'}
+    for future in concurrent.futures.as_completed(future_to_req):
+        req_type = future_to_req[future]
+        data[req_type] = future.result()
+    return data
 
 
 def get_output(input_string):
@@ -147,12 +158,12 @@ def get_output(input_string):
         return fb
 
     # Making requests in parallel
-    responses = asyncio.run(process_requests(input_string))
+    responses = process_requests(input_string)
 
-    spelling_suggestions_items = get_spelling_suggestions(responses[0])
+    spelling_suggestions_items = get_spelling_suggestions(responses['spelling'])
     # Generate possible xml outputs
     formatted_spelling_suggestions = convert_spelling_suggestions(spelling_suggestions_items)
-    formatted_translation_suggestions = get_translation_suggestions(responses[1], responses[2])
+    formatted_translation_suggestions = get_translation_suggestions(responses['vocabulary'], responses['translate'])
     words_in_phase = len(re.split(' ', input_string))
 
     # Output
